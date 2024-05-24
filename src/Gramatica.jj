@@ -1,0 +1,144 @@
+PARSER_BEGIN(Calculator)
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class Calculator {
+
+       private static Map<String, Integer> variables = new HashMap<String, Integer>();
+
+       public static void main(String args[]) throws ParseException {
+           Calculator parser = new Calculator(System.in);
+           parser.Sesion();
+       }
+
+       // obtenemos valor variable
+       private static int obtenerValorVariable(String id) {
+           if (variables.containsKey(id)) {
+               return variables.get(id);
+           } else {
+               throw new RuntimeException("Variable no definida: " + id);
+           }
+       }
+
+       // asignamos un valor a una variable
+       private static void asignarValorVariable(String id, int valor) {
+           variables.put(id, valor);
+       }
+}
+
+PARSER_END(Calculator)
+
+//Definimos los tokens
+TOKEN : {
+    < VAR : "var" >
+    |< DECIMAL : (["0"-"9"])+ >
+    | < BINARIO : "0b" (["0"-"1"])+ >
+    | < OCTAL : "0" (["0"-"7"])* >
+    | < ID : (["a"-"z", "A"-"Z"])+ >
+    | < EOL : "\n" >
+    | < TRUE : "TRUE" >
+    | < FALSE : "FALSE" >
+    | < MENOR : "<" >
+    | < MAYOR : ">" >
+    | < IGUAL : "==" >
+    | < SUMA : "+" >
+    | < RESTA : "-" >
+    | < MULTI : "*" >
+    | < DIV : "/" >
+    | < AND : "AND" >
+    | < OR : "OR" >
+    | < NOT : "NOT" >
+}
+
+//iniciamos sesion del analisis
+void Sesion() : {} {
+    (Declaracion())* (Sentencia())+ <EOF> // esperamos fin del archivo
+
+}
+//regla para la definicion de variables
+void Declaracion() : {} {
+    <VAR> <ID> <EOL>   //declaramos variable seguids de un fin de linea
+}
+
+//reglas para la sentencia
+int Sentencia() : {
+    int resultado;
+} {
+    resultado = Asignacion() | Expresion() | Condicional() <EOL> // esperamos una asignación, una expresión o una condicional, seguida de un fin de línea
+    { return resultado; }
+}
+//reglas asignacion
+int Asignacion() : {
+    String id;
+    int valor;
+} {
+    id = <ID> "=" valor = Expresion() // esperamos un identificador seguido de '=' y una expresión
+
+    { asignarValorVariable(id, valor); return valor; }
+}
+//regla para las expresiones aritmeticas
+int Expresion() : {
+    int valor;
+} {
+    valor = Termino() ( (<SUMA> | <RESTA>) Termino() )* //esperamos un término, seguido de 0 o más operaciones de suma o resta entre términos
+
+    { return valor; }
+}
+//regla para terminos en las expresiones aritmeticas
+int Termino() : {
+    int valor;
+} {
+    valor = Factor() ( (<MULTI> Factor() | <DIV> Factor()) )* //esperamos un factor, seguido de cero o más operaciones de multiplicación o división entre factores
+
+    { return valor; }
+}
+//regla para factores
+int Factor() : {
+    Token t;
+    int valor;
+} {
+    (
+        t = <DECIMAL> { valor = Integer.parseInt(t.image); } //convierte a entero
+        | t = <OCTAL> { valor = Integer.parseInt(t.image, 8); } //convierte a entero
+        | t = <BINARIO> { valor = Integer.parseInt(t.image.substring(2), 2); } //convierte a entero
+        | t = <ID> { valor = obtenerValorVariable(t.image); } //obtiene valor
+        | "(" valor = Expresion() ")" //se evaula lo de dentro del parentesis
+    )
+    { return valor; }
+}
+//regla para condicionales
+int Condicional() : {
+    boolean condicion;
+    int valorVerdadero, valorFalso;
+} {
+    "if" "(" condicion = ExpBooleana() ")" valorVerdadero = Expresion() "else" valorFalso = Expresion() // esperamos una expresión booleana, seguida de una expresión para el true y otra para false
+
+    { return condicion ? valorVerdadero : valorFalso; }
+}
+//regla para expresiones boleanas
+boolean ExpBooleana() : {
+    boolean valor;
+} {
+    valor = Comparacion() ( (<AND> Comparacion() | <OR> Comparacion()) )* // esperamos una comparacion seguida de operaciones logicas o no.
+    { return valor; }
+}
+//regla para comparaciones
+boolean Comparacion() : {
+    int izquierda, derecha;
+    boolean resultado;
+} {
+    izquierda = Expresion()  // esperamos una expresión para el lado izquierdo de la comparación
+    (
+        <MENOR> derecha = Expresion() { resultado = izquierda < derecha; }
+        | <MAYOR> derecha = Expresion() { resultado = izquierda > derecha; }
+        | <IGUAL> derecha = Expresion() { resultado = izquierda == derecha; }
+    )
+    { return resultado; }
+}
+
+void EndOfFile():
+{}
+{
+    <EOF> // Manejo del token EOF
+}
